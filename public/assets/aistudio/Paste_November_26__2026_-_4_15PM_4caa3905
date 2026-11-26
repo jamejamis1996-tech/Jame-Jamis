@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JDM PHARMACY — Point of Sale & Inventory System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+    }
+    .font-mono-receipt {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom scrollbar for clean medical UI */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #receipt-printable, #receipt-printable * {
+        visibility: visible;
+      }
+      #receipt-printable {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Toast Notification Banner -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="bg-emerald-800 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand Logo & Name -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-white text-emerald-700 flex items-center justify-center shadow-sm shrink-0">
+          <!-- Medical Cross SVG -->
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight leading-none">JDM PHARMACY</h1>
+            <span class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/80 border border-emerald-400/40 px-2 py-0.5 rounded-full">POS v2.4</span>
+          </div>
+          <p class="text-xs text-emerald-200 mt-0.5">FDA Licensed Retail Drugstore • Camiguin / Northern Mindanao</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center bg-emerald-900/60 p-1 rounded-xl border border-emerald-700/60">
+        <button onclick="switchTab('pos')" id="tab-pos" class="tab-btn px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-emerald-900 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          <span>POS Checkout</span>
+        </button>
+        <button onclick="switchTab('inventory')" id="tab-inventory" class="tab-btn px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-emerald-100 hover:bg-emerald-800">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          <span>Inventory & Expiry</span>
+          <span id="alert-badge" class="ml-1 bg-amber-500 text-slate-950 text-[11px] font-extrabold px-1.5 py-0.2 rounded-full">0</span>
+        </button>
+        <button onclick="switchTab('sales')" id="tab-sales" class="tab-btn px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-emerald-100 hover:bg-emerald-800">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>Sales & Audit Log</span>
+        </button>
+      </nav>
+
+      <!-- Cashier Selector & Live Clock -->
+      <div class="flex items-center gap-3 text-xs">
+        <div class="hidden md:flex flex-col items-end">
+          <span id="live-clock" class="font-semibold text-white">Loading time...</span>
+          <span class="text-emerald-200 text-[11px]">Shift: <strong class="text-emerald-300">OPEN</strong></span>
+        </div>
+        <div class="flex items-center gap-2 bg-emerald-900/80 border border-emerald-700 rounded-xl px-3 py-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+          <div class="leading-tight">
+            <span class="block text-[9px] uppercase tracking-wider text-emerald-300 font-bold">Pharmacist on Duty</span>
+            <span id="active-pharmacist-name" class="text-white font-extrabold text-xs">ELSIE FE C. BUSLON, RPh</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4">
+
+    <!-- ==================== TAB 1: POS CHECKOUT ==================== -->
+    <section id="view-pos" class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      
+      <!-- LEFT PANEL: Search, Filters & Product Grid (7 cols on lg) -->
+      <div class="lg:col-span-7 xl:col-span-8 flex flex-col gap-3">
+        <!-- Search & Filter Bar -->
+        <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 flex flex-col gap-3">
+          <div class="flex flex-col sm:flex-row gap-2">
+            <div class="relative flex-1">
+              <svg class="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <input 
+                type="text" 
+                id="pos-search" 
+                oninput="renderCatalog()" 
+                placeholder="Search Brand Name, Generic Name, or SKU/Barcode..." 
+                class="w-full pl-11 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 transition"
+              />
+              <button onclick="clearSearch()" id="clear-search-btn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold px-2 py-1 rounded bg-slate-200">
+                ESC
+              </button>
+            </div>
+            <button 
+              onclick="openAddMedicineModal()" 
+              class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 whitespace-nowrap transition"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              <span>Add New Medicine</span>
+            </button>
+          </div>
+
+          <!-- Category Pills -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="category-pills">
+            <button onclick="setCategory('All')" data-cat="All" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 text-white whitespace-nowrap transition">All Medicines</button>
+            <button onclick="setCategory('Analgesics')" data-cat="Analgesics" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap transition">Analgesics & Fever</button>
+            <button onclick="setCategory('Antibiotics')" data-cat="Antibiotics" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap transition">Antibiotics (Rx)</button>
+            <button onclick="setCategory('Maintenance')" data-cat="Maintenance" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap transition">Maintenance (Rx)</button>
+            <button onclick="setCategory('Vitamins')" data-cat="Vitamins" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap transition">Vitamins & Supplements</button>
+            <button onclick="setCategory('OTC')" data-cat="OTC" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap transition">OTC / Cold & Cough</button>
+          </div>
+        </div>
+
+        <!-- Product Cards Grid -->
+        <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[calc(100vh-225px)] overflow-y-auto pr-1">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL: Active Cart & Checkout Billing (5 cols on lg) -->
+      <div class="lg:col-span-5 xl:col-span-4 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col lg:sticky lg:top-[76px] max-h-[calc(100vh-92px)]">
+        <!-- Cart Header -->
+        <div class="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70 rounded-t-2xl">
+          <div class="flex items-center gap-2">
+            <h2 class="font-bold text-slate-800 text-base">Current Order</h2>
+            <span id="cart-count-badge" class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-full">0 items</span>
+          </div>
+          <button onclick="clearCart()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition">
+            Clear Cart
+          </button>
+        </div>
+
+        <!-- Cart Items List -->
+        <div id="cart-items-container" class="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-[180px]">
+          <!-- Empty State or Items -->
+        </div>
+
+        <!-- Prescription (Rx) Verification Box (Hidden unless Rx item is in cart) -->
+        <div id="rx-verification-box" class="hidden mx-3 mb-2 p-2.5 bg-amber-50 border border-amber-300 rounded-xl">
+          <div class="flex items-center justify-between gap-1.5 text-amber-800 font-bold text-xs mb-1.5">
+            <div class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-amber-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+              <span>Rx Prescription Required!</span>
+            </div>
+            <span class="text-[10px] font-semibold text-amber-700">Verified by: ELSIE FE C. BUSLON, RPh</span>
+          </div>
+          <input 
+            type="text" 
+            id="rx-reference-input" 
+            placeholder="Enter Doctor's Name / PRC # or Rx Ref..." 
+            class="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+        </div>
+
+        <!-- Customer Discount Toggles (Regular / Senior Citizen / PWD) -->
+        <div class="px-3 py-2.5 border-t border-slate-200 bg-slate-50/50">
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Customer Discount Classification</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button onclick="setDiscountType('regular')" id="disc-regular" class="disc-btn py-1.5 px-2 rounded-lg text-xs font-bold border bg-emerald-700 text-white border-emerald-700 transition">
+              Regular
+            </button>
+            <button onclick="setDiscountType('senior')" id="disc-senior" class="disc-btn py-1.5 px-2 rounded-lg text-xs font-bold border bg-white text-slate-700 border-slate-300 hover:bg-slate-100 transition">
+              Senior (20%)
+            </button>
+            <button onclick="setDiscountType('pwd')" id="disc-pwd" class="disc-btn py-1.5 px-2 rounded-lg text-xs font-bold border bg-white text-slate-700 border-slate-300 hover:bg-slate-100 transition">
+              PWD (20%)
+            </button>
+          </div>
+
+          <!-- Senior/PWD Customer Details (Conditional) -->
+          <div id="discount-details-fields" class="hidden grid-cols-2 gap-2 mt-2">
+            <input type="text" id="cust-name-input" placeholder="Customer Full Name *" class="px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+            <input type="text" id="cust-id-input" placeholder="OSCA / PWD ID No. *" class="px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+          </div>
+        </div>
+
+        <!-- Totals & Payment Section -->
+        <div class="p-3.5 border-t border-slate-200 bg-white rounded-b-2xl space-y-2.5">
+          <div class="space-y-1 text-xs">
+            <div class="flex justify-between text-slate-600">
+              <span>Gross Subtotal</span>
+              <span id="summary-subtotal" class="font-semibold">₱0.00</span>
+            </div>
+            <div id="row-vat-exempt" class="hidden justify-between text-emerald-700">
+              <span>Less 12% VAT Exemption</span>
+              <span id="summary-vat-exempt" class="font-semibold">-₱0.00</span>
+            </div>
+            <div id="row-discount" class="hidden justify-between text-emerald-700">
+              <span>Less 20% SC/PWD Discount</span>
+              <span id="summary-discount" class="font-semibold">-₱0.00</span>
+            </div>
+            <div id="row-vatable" class="flex justify-between text-slate-400 text-[11px]">
+              <span>VATable Sales / 12% VAT Incl.</span>
+              <span id="summary-vat-info">₱0.00 / ₱0.00</span>
+            </div>
+            <div class="flex justify-between items-baseline pt-1.5 border-t border-slate-200">
+              <span class="text-sm font-extrabold text-slate-900">TOTAL AMOUNT DUE</span>
+              <span id="summary-total" class="text-2xl font-extrabold text-emerald-700">₱0.00</span>
+            </div>
+          </div>
+
+          <!-- Payment Method & Cash Input -->
+          <div class="pt-1 space-y-2">
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="setPaymentMethod('Cash')" id="pay-Cash" class="pay-btn py-1.5 rounded-lg text-xs font-bold border bg-slate-800 text-white border-slate-800 transition">💵 Cash</button>
+              <button onclick="setPaymentMethod('GCash')" id="pay-GCash" class="pay-btn py-1.5 rounded-lg text-xs font-bold border bg-white text-slate-700 border-slate-300 hover:bg-slate-100 transition">📱 GCash</button>
+              <button onclick="setPaymentMethod('Card')" id="pay-Card" class="pay-btn py-1.5 rounded-lg text-xs font-bold border bg-white text-slate-700 border-slate-300 hover:bg-slate-100 transition">💳 Card</button>
+            </div>
+
+            <div id="cash-tender-box" class="space-y-1.5">
+              <div class="flex items-center gap-2">
+                <div class="relative flex-1">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">₱</span>
+                  <input 
+                    type="number" 
+                    id="cash-tendered-input" 
+                    oninput="calculateChange()" 
+                    placeholder="Cash Tendered" 
+                    class="w-full pl-7 pr-3 py-2 text-sm font-bold bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  />
+                </div>
+                <div class="bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-right min-w-[115px]">
+                  <span class="block text-[10px] uppercase font-bold text-slate-500">Change</span>
+                  <span id="cash-change-display" class="text-sm font-extrabold text-slate-900">₱0.00</span>
+                </div>
+              </div>
+              <!-- Quick Denomination Pills -->
+              <div class="flex gap-1.5">
+                <button onclick="setQuickCash('exact')" class="flex-1 py-1 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200">Exact</button>
+                <button onclick="setQuickCash(100)" class="flex-1 py-1 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200">₱100</button>
+                <button onclick="setQuickCash(500)" class="flex-1 py-1 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200">₱500</button>
+                <button onclick="setQuickCash(1000)" class="flex-1 py-1 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200">₱1,000</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Complete Checkout CTA -->
+          <button 
+            onclick="processCheckout()" 
+            class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-sm rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            <span>COMPLETE CHECKOUT & PRINT RECEIPT</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: INVENTORY & EXPIRY (FEFO) ==================== -->
+    <section id="view-inventory" class="hidden space-y-4">
+      <!-- Top Action & Alert Summary Bar -->
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-900">Inventory & Batch Expiry Management (FEFO)</h2>
+          <p class="text-xs text-slate-500">First-Expired, First-Out tracking • Monitor near-expiry batches and low-stock thresholds.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="inv-filter-select" onchange="renderInventory()" class="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600">
+            <option value="all">All Batches</option>
+            <option value="expiring30">Critical Expiry (&lt; 30 Days)</option>
+            <option value="expiring90">Warning Expiry (&lt; 90 Days)</option>
+            <option value="lowstock">Low Stock Items</option>
+          </select>
+          <button onclick="openAddMedicineModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            <span>Add / Restock Medicine</span>
+          </button>
+          <button onclick="resetDemoData()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 transition">
+            Reset Demo Data
+          </button>
+        </div>
+      </div>
+
+      <!-- Inventory Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <th class="py-3 px-4">SKU / Medicine</th>
+                <th class="py-3 px-4">Category & Class</th>
+                <th class="py-3 px-4">Batch / Lot #</th>
+                <th class="py-3 px-4">Expiry Date</th>
+                <th class="py-3 px-4">Stock (Pieces)</th>
+                <th class="py-3 px-4">Unit Price</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body" class="divide-y divide-slate-200 text-xs">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: SALES & AUDIT LOG ==================== -->
+    <section id="view-sales" class="hidden space-y-4">
+      <!-- KPI Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Net Revenue</span>
+          <div id="kpi-revenue" class="text-2xl font-extrabold text-emerald-700 mt-1">₱0.00</div>
+          <span class="text-[11px] text-slate-500">Completed non-voided sales</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Transactions</span>
+          <div id="kpi-transactions" class="text-2xl font-extrabold text-slate-900 mt-1">0</div>
+          <span class="text-[11px] text-slate-500">Official receipts issued</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">SC / PWD Discounts</span>
+          <div id="kpi-discounts" class="text-2xl font-extrabold text-amber-600 mt-1">₱0.00</div>
+          <span class="text-[11px] text-slate-500">20% Discount + VAT Exempt</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Top-Selling Medicine</span>
+          <div id="kpi-top-item" class="text-lg font-extrabold text-slate-900 mt-1 truncate">—</div>
+          <span id="kpi-top-item-sub" class="text-[11px] text-slate-500">0 pcs dispensed</span>
+        </div>
+      </div>
+
+      <!-- Transaction History Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h3 class="font-extrabold text-slate-900 text-base">Transaction History & Pharmacist Audit Log</h3>
+            <p class="text-xs text-slate-500">Reprint official receipts or void transactions (Pharmacist Override PIN: <strong class="font-mono text-slate-800">1234</strong>)</p>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <th class="py-3 px-4">OR / Receipt #</th>
+                <th class="py-3 px-4">Date & Time</th>
+                <th class="py-3 px-4">Pharmacist on Duty</th>
+                <th class="py-3 px-4">Customer / Type</th>
+                <th class="py-3 px-4">Items</th>
+                <th class="py-3 px-4">Total Paid</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sales-table-body" class="divide-y divide-slate-200 text-xs">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODAL: THERMAL RECEIPT ==================== -->
+  <div id="receipt-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between no-print">
+        <span class="text-xs font-bold text-slate-700">Official Pharmacy Receipt</span>
+        <button onclick="closeModal('receipt-modal')" class="text-slate-500 hover:text-slate-800 font-bold text-sm px-2">✕</button>
+      </div>
+      
+      <!-- Printable Receipt Content -->
+      <div id="receipt-printable" class="p-5 overflow-y-auto font-mono-receipt text-[11px] leading-relaxed text-slate-800 bg-white">
+        <!-- Populated dynamically -->
+      </div>
+
+      <div class="p-3 bg-slate-50 border-t border-slate-200 flex gap-2 no-print">
+        <button onclick="window.print()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          <span>Print Receipt</span>
+        </button>
+        <button onclick="closeModal('receipt-modal')" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: ADD / RESTOCK MEDICINE ==================== -->
+  <div id="medicine-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+      <div class="p-4 bg-emerald-800 text-white flex items-center justify-between">
+        <h3 id="med-modal-title" class="font-bold text-base">Add / Restock Medicine</h3>
+        <button onclick="closeModal('medicine-modal')" class="text-emerald-200 hover:text-white font-bold">✕</button>
+      </div>
+      <form id="medicine-form" onsubmit="saveMedicine(event)" class="p-4 space-y-3 text-xs">
+        <input type="hidden" id="med-edit-id" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Brand Name *</label>
+            <input type="text" id="med-brand" required placeholder="e.g. Biogesic" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Generic Name *</label>
+            <input type="text" id="med-generic" required placeholder="e.g. Paracetamol" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Dosage & Form *</label>
+            <input type="text" id="med-dosage" required placeholder="e.g. 500mg Tablet" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Category *</label>
+            <select id="med-category" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none">
+              <option value="Analgesics">Analgesics</option>
+              <option value="Antibiotics">Antibiotics</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Vitamins">Vitamins</option>
+              <option value="OTC">OTC</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Classification *</label>
+            <select id="med-rx" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none">
+              <option value="false">OTC (Over-the-Counter)</option>
+              <option value="true">Rx (Prescription Required)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Batch / Lot Number *</label>
+            <input type="text" id="med-batch" required placeholder="e.g. BTH-2026-09" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Expiration Date *</label>
+            <input type="date" id="med-expiry" required class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Unit Price (₱/pc) *</label>
+            <input type="number" step="0.01" id="med-price" required placeholder="5.50" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Pcs per Blister</label>
+            <input type="number" id="med-blister-size" value="10" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Pcs per Box</label>
+            <input type="number" id="med-box-size" value="100" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Stock Quantity (Pieces) *</label>
+            <input type="number" id="med-stock" required min="0" placeholder="200" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Reorder Alert Level</label>
+            <input type="number" id="med-reorder" value="50" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+          </div>
+        </div>
+        <div id="med-add-to-cart-option" class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="med-auto-cart" checked class="w-4 h-4 accent-emerald-600 rounded cursor-pointer" />
+          <label for="med-auto-cart" class="text-xs font-semibold text-slate-700 cursor-pointer">I-add dayon sa current POS cart inig save (1 pc)</label>
+        </div>
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <button type="button" onclick="closeModal('medicine-modal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm">Save Medicine</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: VOID TRANSACTION PIN ==================== -->
+  <div id="void-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 space-y-4">
+      <div class="flex items-center gap-2.5 text-rose-600">
+        <div class="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center font-bold">!</div>
+        <div>
+          <h3 class="font-extrabold text-slate-900 text-base">Pharmacist Void Override</h3>
+          <p class="text-xs text-slate-500">Enter Pharmacist PIN to void <span id="void-or-label" class="font-bold text-slate-800"></span></p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">Pharmacist Security PIN (Demo: 1234)</label>
+        <input type="password" id="void-pin-input" maxlength="6" placeholder="••••" class="w-full px-3 py-2.5 text-center tracking-widest font-mono text-lg border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500" />
+      </div>
+      <div class="flex gap-2">
+        <button onclick="closeModal('void-modal')" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancel</button>
+        <button onclick="confirmVoidTransaction()" class="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl">Confirm Void</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== INITIAL REALISTIC PHILIPPINE PHARMACY DATASET ====================
+    // Helper to get relative date string (YYYY-MM-DD) from today so expiry alerts are always testable
+    function getRelativeDate(daysOffset) {
+      const d = new Date();
+      d.setDate(d.getDate() + daysOffset);
+      return d.toISOString().split('T')[0];
+    }
+
+    const INITIAL_MEDICINES = [
+      { id: 'MED-001', sku: '4800011001', brand: 'Biogesic', generic: 'Paracetamol', dosage: '500mg Tablet', category: 'Analgesics', isRx: false, price: 4.75, blisterSize: 10, boxSize: 100, stock: 450, reorderLevel: 100, batch: 'BTH-26A01', expiry: getRelativeDate(420) },
+      { id: 'MED-002', sku: '4800011002', brand: 'Amoxil', generic: 'Amoxicillin Trihydrate', dosage: '500mg Capsule', category: 'Antibiotics', isRx: true, price: 14.50, blisterSize: 10, boxSize: 100, stock: 220, reorderLevel: 80, batch: 'BTH-26B14', expiry: getRelativeDate(280) },
+      { id: 'MED-003', sku: '4800011003', brand: 'Lifezar', generic: 'Losartan Potassium', dosage: '50mg Tablet', category: 'Maintenance', isRx: true, price: 12.00, blisterSize: 10, boxSize: 100, stock: 310, reorderLevel: 100, batch: 'BTH-25L09', expiry: getRelativeDate(22) }, // Critical Expiry < 30 days
+      { id: 'MED-004', sku: '4800011004', brand: 'Alnix', generic: 'Cetirizine Dihydrochloride', dosage: '10mg Tablet', category: 'OTC', isRx: false, price: 18.25, blisterSize: 10, boxSize: 100, stock: 160, reorderLevel: 50, batch: 'BTH-26C03', expiry: getRelativeDate(365) },
+      { id: 'MED-005', sku: '4800011005', brand: 'Enervon-C', generic: 'Multivitamins + Ascorbic Acid', dosage: '500mg Tablet', category: 'Vitamins', isRx: false, price: 9.50, blisterSize: 10, boxSize: 100, stock: 500, reorderLevel: 120, batch: 'BTH-26V11', expiry: getRelativeDate(510) },
+      { id: 'MED-006', sku: '4800011006', brand: 'Neozep Forte', generic: 'Phenylephrine + Chlorphenamine + Paracetamol', dosage: 'Tablet', category: 'OTC', isRx: false, price: 7.00, blisterSize: 10, boxSize: 100, stock: 38, reorderLevel: 60, batch: 'BTH-26N04', expiry: getRelativeDate(195) }, // Low Stock
+      { id: 'MED-007', sku: '4800011007', brand: 'Kremil-S', generic: 'Aluminum Hydroxide + Magnesium + Simeticone', dosage: 'Chewable Tablet', category: 'OTC', isRx: false, price: 8.50, blisterSize: 10, boxSize: 100, stock: 240, reorderLevel: 60, batch: 'BTH-26K02', expiry: getRelativeDate(310) },
+      { id: 'MED-008', sku: '4800011008', brand: 'Solmux', generic: 'Carbocisteine', dosage: '500mg Capsule', category: 'OTC', isRx: false, price: 13.75, blisterSize: 10, boxSize: 100, stock: 190, reorderLevel: 60, batch: 'BTH-26S08', expiry: getRelativeDate(260) },
+      { id: 'MED-009', sku: '4800011009', brand: 'Glucophage', generic: 'Metformin Hydrochloride', dosage: '500mg Tablet', category: 'Maintenance', isRx: true, price: 8.25, blisterSize: 10, boxSize: 100, stock: 340, reorderLevel: 100, batch: 'BTH-25M12', expiry: getRelativeDate(68) }, // Warning Expiry < 90 days
+      { id: 'MED-010', sku: '4800011010', brand: 'Norvasc', generic: 'Amlodipine Besilate', dosage: '5mg Tablet', category: 'Maintenance', isRx: true, price: 16.50, blisterSize: 10, boxSize: 100, stock: 210, reorderLevel: 80, batch: 'BTH-26A19', expiry: getRelativeDate(400) },
+      { id: 'MED-011', sku: '4800011011', brand: 'Dolfenal', generic: 'Mefenamic Acid', dosage: '500mg Tablet', category: 'Analgesics', isRx: true, price: 24.00, blisterSize: 10, boxSize: 100, stock: 120, reorderLevel: 40, batch: 'BTH-26D05', expiry: getRelativeDate(330) },
+      { id: 'MED-012', sku: '4800011012', brand: 'Zithromax', generic: 'Azithromycin', dosage: '500mg Tablet', category: 'Antibiotics', isRx: true, price: 89.00, blisterSize: 3, boxSize: 30, stock: 45, reorderLevel: 20, batch: 'BTH-26Z01', expiry: getRelativeDate(290) },
+      { id: 'MED-013', sku: '4800011013', brand: 'ImmunPro', generic: 'Sodium Ascorbate + Zinc', dosage: '500mg/10mg Tablet', category: 'Vitamins', isRx: false, price: 11.25, blisterSize: 10, boxSize: 100, stock: 410, reorderLevel: 100, batch: 'BTH-26I07', expiry: getRelativeDate(480) },
+      { id: 'MED-014', sku: '4800011014', brand: 'Advil', generic: 'Ibuprofen', dosage: '200mg Softgel', category: 'Analgesics', isRx: false, price: 10.50, blisterSize: 10, boxSize: 100, stock: 25, reorderLevel: 50, batch: 'BTH-26AD2', expiry: getRelativeDate(210) }, // Low Stock
+      { id: 'MED-015', sku: '4800011015', brand: 'Augmentin', generic: 'Co-Amoxiclav', dosage: '625mg Tablet', category: 'Antibiotics', isRx: true, price: 62.00, blisterSize: 7, boxSize: 14, stock: 84, reorderLevel: 30, batch: 'BTH-25AU8', expiry: getRelativeDate(55) }, // Warning Expiry < 90 days
+      { id: 'MED-016', sku: '4800011016', brand: 'Diatabs', generic: 'Loperamide', dosage: '2mg Capsule', category: 'OTC', isRx: false, price: 9.00, blisterSize: 10, boxSize: 100, stock: 270, reorderLevel: 60, batch: 'BTH-26DT4', expiry: getRelativeDate(390) }
+    ];
+
+    // ==================== APPLICATION STATE ====================
+    const PHARMACIST_ON_DUTY = 'ELSIE FE C. BUSLON, RPh';
+    let medicines = [];
+    let transactions = [];
+    let cart = []; // { medId, unitType: 'piece'|'blister'|'box', qty: number }
+    let activeCategory = 'All';
+    let discountType = 'regular'; // 'regular' | 'senior' | 'pwd'
+    let paymentMethod = 'Cash';
+    let selectedUnitByMed = {}; // { medId: 'piece'|'blister'|'box' }
+    let pendingVoidTxId = null;
+
+    // ==================== INITIALIZATION & STORAGE ====================
+    function initApp() {
+      const savedMeds = localStorage.getItem('jdm_pharmacy_meds_v1');
+      const savedTx = localStorage.getItem('jdm_pharmacy_tx_v1');
+
+      medicines = savedMeds ? JSON.parse(savedMeds) : JSON.parse(JSON.stringify(INITIAL_MEDICINES));
+      transactions = savedTx ? JSON.parse(savedTx) : [];
+
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      renderCatalog();
+      renderCart();
+      renderInventory();
+      renderSales();
+      updateAlertBadge();
+    }
+
+    function saveToStorage() {
+      localStorage.setItem('jdm_pharmacy_meds_v1', JSON.stringify(medicines));
+      localStorage.setItem('jdm_pharmacy_tx_v1', JSON.stringify(transactions));
+      updateAlertBadge();
+    }
+
+    function resetDemoData() {
+      medicines = JSON.parse(JSON.stringify(INITIAL_MEDICINES));
+      transactions = [];
+      cart = [];
+      saveToStorage();
+      renderCatalog();
+      renderCart();
+      renderInventory();
+      renderSales();
+      showToast('Demo data has been reset to defaults.', 'emerald');
+    }
+
+    function formatPHP(amount) {
+      return '₱' + Number(amount || 0).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function getDaysUntilExpiry(expiryStr) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const exp = new Date(expiryStr);
+      exp.setHours(0, 0, 0, 0);
+      return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function updateAlertBadge() {
+      const alertCount = medicines.filter(m => getDaysUntilExpiry(m.expiry) <= 90 || m.stock <= m.reorderLevel).length;
+      const badge = document.getElementById('alert-badge');
+      if (badge) badge.textContent = alertCount;
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const opts = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+      document.getElementById('live-clock').textContent = now.toLocaleString('en-PH', opts);
+    }
+
+    // ==================== NAVIGATION TABS ====================
+    function switchTab(tabName) {
+      ['pos', 'inventory', 'sales'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tabName);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tabName) {
+          btn.classList.add('bg-white', 'text-emerald-900', 'shadow-sm');
+          btn.classList.remove('text-emerald-100', 'hover:bg-emerald-800');
+        } else {
+          btn.classList.remove('bg-white', 'text-emerald-900', 'shadow-sm');
+          btn.classList.add('text-emerald-100', 'hover:bg-emerald-800');
+        }
+      });
+
+      if (tabName === 'inventory') renderInventory();
+      if (tabName === 'sales') renderSales();
+    }
+
+    // ==================== POS CATALOG & SEARCH ====================
+    function setCategory(category) {
+      activeCategory = category;
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        if (btn.dataset.cat === category) {
+          btn.classList.add('bg-emerald-700', 'text-white');
+          btn.classList.remove('bg-slate-100', 'text-slate-700', 'hover:bg-slate-200');
+        } else {
+          btn.classList.remove('bg-emerald-700', 'text-white');
+          btn.classList.add('bg-slate-100', 'text-slate-700', 'hover:bg-slate-200');
+        }
+      });
+      renderCatalog();
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('pos-search');
+      input.value = '';
+      renderCatalog();
+      input.focus();
+    }
+
+    function changeCardUnit(medId, unit) {
+      selectedUnitByMed[medId] = unit;
+      renderCatalog();
+    }
+
+    function renderCatalog() {
+      const query = document.getElementById('pos-search').value.trim().toLowerCase();
+      document.getElementById('clear-search-btn').classList.toggle('hidden', query.length === 0);
+
+      // Sort by FEFO (First-Expired, First-Out)
+      const sortedMeds = [...medicines].sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+
+      const filtered = sortedMeds.filter(m => {
+        const matchesCat = activeCategory === 'All' || m.category === activeCategory;
+        const matchesQuery = !query ||
+          m.brand.toLowerCase().includes(query) ||
+          m.generic.toLowerCase().includes(query) ||
+          m.sku.toLowerCase().includes(query) ||
+          m.category.toLowerCase().includes(query);
+        return matchesCat && matchesQuery;
+      });
+
+      const grid = document.getElementById('catalog-grid');
+      if (filtered.length === 0) {
+        const rawQuery = document.getElementById('pos-search').value.trim();
+        grid.innerHTML = `
+          <div class="col-span-full bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 space-y-3">
+            <div>
+              <p class="font-bold text-sm text-slate-700">Wala pa sa system ang "${rawQuery || 'gipangita nga tambal'}"</p>
+              <p class="text-xs text-slate-400 mt-1">Pwede nimo i-add karon dayon sa JDM PHARMACY system apil ang presyo ug stock.</p>
+            </div>
+            <button onclick="openAddMedicineModal('${rawQuery.replace(/'/g, "\\'")}')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              <span>+ Add "${rawQuery || 'New Medicine'}" to System</span>
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(m => {
+        const unit = selectedUnitByMed[m.id] || 'piece';
+        const multiplier = unit === 'box' ? m.boxSize : (unit === 'blister' ? m.blisterSize : 1);
+        const unitPrice = m.price * multiplier;
+        const outOfStock = m.stock < multiplier;
+        const isLowStock = m.stock <= m.reorderLevel;
+        const daysToExp = getDaysUntilExpiry(m.expiry);
+
+        let expiryTag = '';
+        if (daysToExp <= 30) {
+          expiryTag = `<span class="bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-md">Exp: ${daysToExp}d</span>`;
+        } else if (daysToExp <= 90) {
+          expiryTag = `<span class="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-md">Exp: ${daysToExp}d</span>`;
+        }
+
+        return `
+          <div class="bg-white rounded-2xl border ${outOfStock ? 'border-slate-200 opacity-60' : 'border-slate-200 hover:border-emerald-400'} p-3.5 shadow-xs flex flex-col justify-between gap-3 transition">
+            <div>
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <h3 class="font-extrabold text-slate-900 text-sm truncate" title="${m.brand}">${m.brand}</h3>
+                  <p class="text-xs text-slate-500 truncate" title="${m.generic}">${m.generic}</p>
+                </div>
+                <span class="shrink-0 text-[10px] font-extrabold px-2 py-0.5 rounded-md ${m.isRx ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">
+                  ${m.isRx ? 'Rx' : 'OTC'}
+                </span>
+              </div>
+
+              <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span class="bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md">${m.dosage}</span>
+                <span class="${isLowStock ? 'bg-amber-100 text-amber-800 font-bold' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-md">
+                  Stock: ${m.stock} pcs
+                </span>
+                ${expiryTag}
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div>
+                <select onchange="changeCardUnit('${m.id}', this.value)" class="text-[11px] font-bold bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-emerald-600">
+                  <option value="piece" ${unit === 'piece' ? 'selected' : ''}>Piece (1)</option>
+                  <option value="blister" ${unit === 'blister' ? 'selected' : ''}>Blister (${m.blisterSize})</option>
+                  <option value="box" ${unit === 'box' ? 'selected' : ''}>Box (${m.boxSize})</option>
+                </select>
+                <div class="text-base font-extrabold text-emerald-700 mt-0.5">${formatPHP(unitPrice)}</div>
+              </div>
+
+              <button 
+                onclick="addToCart('${m.id}')" 
+                ${outOfStock ? 'disabled' : ''}
+                class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 ${outOfStock ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs'}"
+              >
+                <span>+ Add</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==================== CART MANAGEMENT ====================
+    function addToCart(medId) {
+      const med = medicines.find(m => m.id === medId);
+      if (!med) return;
+
+      const unitType = selectedUnitByMed[medId] || 'piece';
+      const multiplier = unitType === 'box' ? med.boxSize : (unitType === 'blister' ? med.blisterSize : 1);
+
+      // Calculate total pieces of this medicine already in cart
+      const existingPiecesInCart = cart
+        .filter(item => item.medId === medId)
+        .reduce((sum, item) => {
+          const mult = item.unitType === 'box' ? med.boxSize : (item.unitType === 'blister' ? med.blisterSize : 1);
+          return sum + (item.qty * mult);
+        }, 0);
+
+      if (existingPiecesInCart + multiplier > med.stock) {
+        showToast(`Insufficient stock for ${med.brand}! Available: ${med.stock} pcs`, 'rose');
+        return;
+      }
+
+      const existingLine = cart.find(item => item.medId === medId && item.unitType === unitType);
+      if (existingLine) {
+        existingLine.qty += 1;
+      } else {
+        cart.push({ medId, unitType, qty: 1 });
+      }
+
+      renderCart();
+    }
+
+    function updateCartQty(index, delta) {
+      const item = cart[index];
+      const med = medicines.find(m => m.id === item.medId);
+      if (!item || !med) return;
+
+      const multiplier = item.unitType === 'box' ? med.boxSize : (item.unitType === 'blister' ? med.blisterSize : 1);
+
+      if (delta > 0) {
+        const existingPiecesInCart = cart
+          .filter(c => c.medId === item.medId)
+          .reduce((sum, c) => {
+            const mult = c.unitType === 'box' ? med.boxSize : (c.unitType === 'blister' ? med.blisterSize : 1);
+            return sum + (c.qty * mult);
+          }, 0);
+
+        if (existingPiecesInCart + multiplier > med.stock) {
+          showToast(`Maximum available stock reached for ${med.brand}.`, 'amber');
+          return;
+        }
+        item.qty += 1;
+      } else {
+        item.qty -= 1;
+        if (item.qty <= 0) {
+          cart.splice(index, 1);
+        }
+      }
+      renderCart();
+    }
+
+    function removeCartItem(index) {
+      cart.splice(index, 1);
+      renderCart();
+    }
+
+    function clearCart() {
+      cart = [];
+      document.getElementById('cash-tendered-input').value = '';
+      document.getElementById('rx-reference-input').value = '';
+      renderCart();
+    }
+
+    function setDiscountType(type) {
+      discountType = type;
+      ['regular', 'senior', 'pwd'].forEach(t => {
+        const btn = document.getElementById(`disc-${t}`);
+        if (t === type) {
+          btn.classList.add('bg-emerald-700', 'text-white', 'border-emerald-700');
+          btn.classList.remove('bg-white', 'text-slate-700', 'border-slate-300');
+        } else {
+          btn.classList.remove('bg-emerald-700', 'text-white', 'border-emerald-700');
+          btn.classList.add('bg-white', 'text-slate-700', 'border-slate-300');
+        }
+      });
+
+      const detailsBox = document.getElementById('discount-details-fields');
+      if (type === 'senior' || type === 'pwd') {
+        detailsBox.classList.remove('hidden');
+        detailsBox.classList.add('grid');
+      } else {
+        detailsBox.classList.add('hidden');
+        detailsBox.classList.remove('grid');
+      }
+      calculateTotals();
+    }
+
+    function setPaymentMethod(method) {
+      paymentMethod = method;
+      ['Cash', 'GCash', 'Card'].forEach(m => {
+        const btn = document.getElementById(`pay-${m}`);
+        if (m === method) {
+          btn.classList.add('bg-slate-800', 'text-white', 'border-slate-800');
+          btn.classList.remove('bg-white', 'text-slate-700', 'border-slate-300');
+        } else {
+          btn.classList.remove('bg-slate-800', 'text-white', 'border-slate-800');
+          btn.classList.add('bg-white', 'text-slate-700', 'border-slate-300');
+        }
+      });
+
+      document.getElementById('cash-tender-box').classList.toggle('hidden', method !== 'Cash');
+    }
+
+    function calculateTotals() {
+      let grossSubtotal = 0;
+      cart.forEach(item => {
+        const med = medicines.find(m => m.id === item.medId);
+        if (med) {
+          const mult = item.unitType === 'box' ? med.boxSize : (item.unitType === 'blister' ? med.blisterSize : 1);
+          grossSubtotal += med.price * mult * item.qty;
+        }
+      });
+
+      let vatExemptAmount = 0;
+      let scPwdDiscount = 0;
+      let netTotal = grossSubtotal;
+      let vatableSales = grossSubtotal / 1.12;
+      let vatAmount = grossSubtotal - vatableSales;
+
+      if ((discountType === 'senior' || discountType === 'pwd') && grossSubtotal > 0) {
+        // Philippine Senior Citizen / PWD Law (RA 9994 / RA 10754): Remove 12% VAT first, then apply 20% discount
+        const vatExclusive = grossSubtotal / 1.12;
+        vatExemptAmount = grossSubtotal - vatExclusive;
+        scPwdDiscount = vatExclusive * 0.20;
+        netTotal = vatExclusive - scPwdDiscount;
+        vatableSales = 0;
+        vatAmount = 0;
+      }
+
+      document.getElementById('summary-subtotal').textContent = formatPHP(grossSubtotal);
+      
+      const rowVatExempt = document.getElementById('row-vat-exempt');
+      const rowDiscount = document.getElementById('row-discount');
+      if (discountType === 'senior' || discountType === 'pwd') {
+        rowVatExempt.classList.remove('hidden');
+        rowVatExempt.classList.add('flex');
+        rowDiscount.classList.remove('hidden');
+        rowDiscount.classList.add('flex');
+        document.getElementById('summary-vat-exempt').textContent = '-' + formatPHP(vatExemptAmount);
+        document.getElementById('summary-discount').textContent = '-' + formatPHP(scPwdDiscount);
+        document.getElementById('summary-vat-info').textContent = `VAT-Exempt: ${formatPHP(grossSubtotal / 1.12)}`;
+      } else {
+        rowVatExempt.classList.add('hidden');
+        rowVatExempt.classList.remove('flex');
+        rowDiscount.classList.add('hidden');
+        rowDiscount.classList.remove('flex');
+        document.getElementById('summary-vat-info').textContent = `${formatPHP(vatableSales)} / ${formatPHP(vatAmount)}`;
+      }
+
+      document.getElementById('summary-total').textContent = formatPHP(netTotal);
+      calculateChange();
+
+      return { grossSubtotal, vatExemptAmount, scPwdDiscount, totalDiscount: vatExemptAmount + scPwdDiscount, netTotal, vatableSales, vatAmount };
+    }
+
+    function setQuickCash(val) {
+      const { netTotal } = calculateTotals();
+      const input = document.getElementById('cash-tendered-input');
+      if (val === 'exact') {
+        input.value = netTotal.toFixed(2);
+      } else {
+        input.value = val;
+      }
+      calculateChange();
+    }
+
+    function calculateChange() {
+      const { netTotal } = (() => {
+        // Compute netTotal directly without recursion
+        let gross = 0;
+        cart.forEach(item => {
+          const med = medicines.find(m => m.id === item.medId);
+          if (med) {
+            const mult = item.unitType === 'box' ? med.boxSize : (item.unitType === 'blister' ? med.blisterSize : 1);
+            gross += med.price * mult * item.qty;
+          }
+        });
+        if ((discountType === 'senior' || discountType === 'pwd') && gross > 0) {
+          const vatEx = gross / 1.12;
+          return { netTotal: vatEx - (vatEx * 0.20) };
+        }
+        return { netTotal: gross };
+      })();
+
+      const tendered = parseFloat(document.getElementById('cash-tendered-input').value) || 0;
+      const change = Math.max(0, tendered - netTotal);
+      const display = document.getElementById('cash-change-display');
+      display.textContent = formatPHP(change);
+      display.classList.toggle('text-emerald-700', tendered >= netTotal && netTotal > 0);
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cart-items-container');
+      const countBadge = document.getElementById('cart-count-badge');
+      const totalItems = cart.reduce((sum, i) => sum + i.qty, 0);
+      countBadge.textContent = `${totalItems} item${totalItems === 1 ? '' : 's'}`;
+
+      let hasRxItem = false;
+
+      if (cart.length === 0) {
+        container.innerHTML = `
+          <div class="h-full flex flex-col items-center justify-center text-center py-8 text-slate-400">
+            <svg class="w-10 h-10 mb-2 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+            <p class="text-xs font-semibold">Cart is currently empty</p>
+            <p class="text-[11px] mt-0.5">Select medicines from the catalog to begin checkout.</p>
+          </div>`;
+      } else {
+        container.innerHTML = cart.map((item, idx) => {
+          const med = medicines.find(m => m.id === item.medId);
+          if (!med) return '';
+          if (med.isRx) hasRxItem = true;
+
+          const mult = item.unitType === 'box' ? med.boxSize : (item.unitType === 'blister' ? med.blisterSize : 1);
+          const unitPrice = med.price * mult;
+          const lineTotal = unitPrice * item.qty;
+          const unitLabel = item.unitType === 'box' ? `Box (${med.boxSize}s)` : (item.unitType === 'blister' ? `Blister (${med.blisterSize}s)` : 'Piece');
+
+          return `
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-slate-900 text-xs truncate">${med.brand}</span>
+                  ${med.isRx ? '<span class="text-[9px] font-extrabold bg-rose-100 text-rose-700 px-1.5 rounded">Rx</span>' : ''}
+                </div>
+                <div class="text-[11px] text-slate-500">${med.dosage} • ${unitLabel} @ ${formatPHP(unitPrice)}</div>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <button onclick="updateCartQty(${idx}, -1)" class="w-6 h-6 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 font-bold text-slate-700 flex items-center justify-center">-</button>
+                <span class="w-6 text-center text-xs font-extrabold text-slate-900">${item.qty}</span>
+                <button onclick="updateCartQty(${idx}, 1)" class="w-6 h-6 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 font-bold text-slate-700 flex items-center justify-center">+</button>
+              </div>
+
+              <div class="text-right min-w-[68px]">
+                <div class="text-xs font-extrabold text-slate-900">${formatPHP(lineTotal)}</div>
+                <button onclick="removeCartItem(${idx})" class="text-[10px] text-rose-600 hover:underline font-semibold">Remove</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('rx-verification-box').classList.toggle('hidden', !hasRxItem);
+      calculateTotals();
+    }
+
+    // ==================== CHECKOUT & RECEIPT GENERATION ====================
+    function processCheckout() {
+      if (cart.length === 0) {
+        showToast('Cart is empty. Add medicines before checking out.', 'amber');
+        return;
+      }
+
+      // Check Rx verification
+      const hasRx = cart.some(item => medicines.find(m => m.id === item.medId)?.isRx);
+      const rxRef = document.getElementById('rx-reference-input').value.trim();
+      if (hasRx && !rxRef) {
+        showToast('Please enter Doctor Name / PRC # or Rx Reference for prescription items.', 'rose');
+        document.getElementById('rx-reference-input').focus();
+        return;
+      }
+
+      // Check Senior / PWD fields
+      const custName = document.getElementById('cust-name-input').value.trim();
+      const custId = document.getElementById('cust-id-input').value.trim();
+      if ((discountType === 'senior' || discountType === 'pwd') && (!custName || !custId)) {
+        showToast('Customer Name and OSCA/PWD ID Number are required for 20% discount.', 'rose');
+        return;
+      }
+
+      const totals = calculateTotals();
+      let cashTendered = totals.netTotal;
+      let changeDue = 0;
+
+      if (paymentMethod === 'Cash') {
+        cashTendered = parseFloat(document.getElementById('cash-tendered-input').value) || 0;
+        if (cashTendered < totals.netTotal - 0.009) {
+          showToast(`Insufficient cash tendered. Total due is ${formatPHP(totals.netTotal)}.`, 'rose');
+          document.getElementById('cash-tendered-input').focus();
+          return;
+        }
+        changeDue = Math.max(0, cashTendered - totals.netTotal);
+      }
+
+      // Deduct stock & build line items snapshot
+      const lineItems = cart.map(item => {
+        const med = medicines.find(m => m.id === item.medId);
+        const mult = item.unitType === 'box' ? med.boxSize : (item.unitType === 'blister' ? med.blisterSize : 1);
+        const totalPieces = item.qty * mult;
+        med.stock -= totalPieces;
+
+        return {
+          medId: med.id,
+          brand: med.brand,
+          generic: med.generic,
+          dosage: med.dosage,
+          isRx: med.isRx,
+          unitType: item.unitType,
+          qty: item.qty,
+          totalPieces,
+          unitPrice: med.price * mult,
+          lineTotal: med.price * mult * item.qty
+        };
+      });
+
+      const txRecord = {
+        orNumber: 'OR-' + String(100001 + transactions.length),
+        timestamp: new Date().toISOString(),
+        cashier: PHARMACIST_ON_DUTY,
+        discountType,
+        customerName: discountType === 'regular' ? 'Walk-in Customer' : custName,
+        customerId: discountType === 'regular' ? '' : custId,
+        rxReference: hasRx ? rxRef : '',
+        paymentMethod,
+        cashTendered,
+        changeDue,
+        ...totals,
+        items: lineItems,
+        status: 'COMPLETED'
+      };
+
+      transactions.unshift(txRecord);
+      saveToStorage();
+
+      // Reset cart & fields
+      cart = [];
+      document.getElementById('cash-tendered-input').value = '';
+      document.getElementById('rx-reference-input').value = '';
+      document.getElementById('cust-name-input').value = '';
+      document.getElementById('cust-id-input').value = '';
+      setDiscountType('regular');
+
+      renderCatalog();
+      renderCart();
+      renderInventory();
+      renderSales();
+
+      openReceiptModal(txRecord);
+      showToast(`Transaction ${txRecord.orNumber} completed!`, 'emerald');
+    }
+
+    function openReceiptModal(tx) {
+      const dateStr = new Date(tx.timestamp).toLocaleString('en-PH');
+      const itemsHtml = tx.items.map(i => `
+        <div class="mb-1.5">
+          <div class="flex justify-between font-bold">
+            <span>${i.brand} (${i.dosage}) ${i.isRx ? '[Rx]' : ''}</span>
+            <span>${formatPHP(i.lineTotal)}</span>
+          </div>
+          <div class="text-slate-500 text-[10px] pl-2">
+            ${i.qty} x ${i.unitType.toUpperCase()} @ ${formatPHP(i.unitPrice)}
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('receipt-printable').innerHTML = `
+        <div class="text-center border-b border-dashed border-slate-400 pb-3 mb-3">
+          <div class="font-extrabold text-sm tracking-wider">JDM PHARMACY</div>
+          <div class="text-[10px] text-slate-600">FDA LTO No. 3000008941254</div>
+          <div class="text-[10px] text-slate-600">Poblacion, Mambajao, Camiguin</div>
+          <div class="text-[10px] text-slate-600">VAT Reg TIN: 245-891-330-000</div>
+          <div class="mt-2 font-bold text-xs">OFFICIAL RECEIPT</div>
+          <div class="font-bold">${tx.orNumber}</div>
+        </div>
+
+        <div class="text-[10px] space-y-0.5 border-b border-dashed border-slate-400 pb-2.5 mb-2.5">
+          <div>Date: ${dateStr}</div>
+          <div>Pharmacist on Duty: ${tx.cashier}</div>
+          <div>Customer: ${tx.customerName}</div>
+          ${tx.customerId ? `<div>${tx.discountType.toUpperCase()} ID: ${tx.customerId}</div>` : ''}
+          ${tx.rxReference ? `<div>Rx Ref/MD: ${tx.rxReference} (Verified by ${tx.cashier})</div>` : ''}
+        </div>
+
+        <div class="border-b border-dashed border-slate-400 pb-2.5 mb-2.5">
+          ${itemsHtml}
+        </div>
+
+        <div class="space-y-1 text-[11px] border-b border-dashed border-slate-400 pb-2.5 mb-2.5">
+          <div class="flex justify-between">
+            <span>Gross Subtotal:</span>
+            <span>${formatPHP(tx.grossSubtotal)}</span>
+          </div>
+          ${tx.vatExemptAmount > 0 ? `
+            <div class="flex justify-between">
+              <span>Less 12% VAT Exempt:</span>
+              <span>-${formatPHP(tx.vatExemptAmount)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Less 20% SC/PWD Disc:</span>
+              <span>-${formatPHP(tx.scPwdDiscount)}</span>
+            </div>
+          ` : `
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span>VATable Sales:</span>
+              <span>${formatPHP(tx.vatableSales)}</span>
+            </div>
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span>12% VAT Amount:</span>
+              <span>${formatPHP(tx.vatAmount)}</span>
+            </div>
+          `}
+          <div class="flex justify-between font-extrabold text-xs pt-1 border-t border-slate-300">
+            <span>TOTAL DUE:</span>
+            <span>${formatPHP(tx.netTotal)}</span>
+          </div>
+          <div class="flex justify-between pt-1">
+            <span>Payment (${tx.paymentMethod}):</span>
+            <span>${formatPHP(tx.cashTendered)}</span>
+          </div>
+          <div class="flex justify-between font-bold">
+            <span>CHANGE:</span>
+            <span>${formatPHP(tx.changeDue)}</span>
+          </div>
+        </div>
+
+        <div class="text-center text-[10px] text-slate-500 space-y-1">
+          ${tx.status === 'VOIDED' ? '<div class="text-rose-600 font-extrabold text-xs border border-rose-600 py-1 my-1">*** VOIDED TRANSACTION ***</div>' : ''}
+          <div>Thank you for trusting JDM PHARMACY!</div>
+          <div>For your health & wellness needs.</div>
+          <div class="pt-1">THIS SERVES AS YOUR OFFICIAL RECEIPT</div>
+        </div>
+      `;
+
+      document.getElementById('receipt-modal').classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // ==================== INVENTORY & EXPIRY MANAGEMENT ====================
+    function renderInventory() {
+      const filter = document.getElementById('inv-filter-select').value;
+      const tbody = document.getElementById('inventory-table-body');
+
+      const sorted = [...medicines].sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+      const filtered = sorted.filter(m => {
+        const days = getDaysUntilExpiry(m.expiry);
+        if (filter === 'expiring30') return days <= 30;
+        if (filter === 'expiring90') return days <= 90;
+        if (filter === 'lowstock') return m.stock <= m.reorderLevel;
+        return true;
+      });
+
+      tbody.innerHTML = filtered.map(m => {
+        const days = getDaysUntilExpiry(m.expiry);
+        let statusBadges = [];
+
+        if (days <= 0) {
+          statusBadges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white">EXPIRED</span>`);
+        } else if (days <= 30) {
+          statusBadges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Exp in ${days}d</span>`);
+        } else if (days <= 90) {
+          statusBadges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Exp in ${days}d</span>`);
+        } else {
+          statusBadges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Good (${days}d)</span>`);
+        }
+
+        if (m.stock <= m.reorderLevel) {
+          statusBadges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Low Stock</span>`);
+        }
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="py-3 px-4">
+              <div class="font-bold text-slate-900">${m.brand} <span class="text-slate-500 font-normal">(${m.dosage})</span></div>
+              <div class="text-[11px] text-slate-500">${m.generic} • <span class="font-mono">${m.sku}</span></div>
+            </td>
+            <td class="py-3 px-4">
+              <span class="text-slate-700 font-medium">${m.category}</span>
+              <span class="ml-1.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded ${m.isRx ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}">${m.isRx ? 'Rx' : 'OTC'}</span>
+            </td>
+            <td class="py-3 px-4 font-mono font-semibold text-slate-700">${m.batch}</td>
+            <td class="py-3 px-4 font-semibold ${days <= 30 ? 'text-rose-600' : (days <= 90 ? 'text-amber-700' : 'text-slate-700')}">${m.expiry}</td>
+            <td class="py-3 px-4 font-extrabold ${m.stock <= m.reorderLevel ? 'text-amber-700' : 'text-slate-900'}">${m.stock} pcs</td>
+            <td class="py-3 px-4 font-bold text-emerald-700">${formatPHP(m.price)}</td>
+            <td class="py-3 px-4">
+              <div class="flex flex-wrap gap-1">${statusBadges.join('')}</div>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="openEditMedicineModal('${m.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-emerald-100 hover:text-emerald-800 text-slate-700 font-bold rounded-lg transition">
+                Edit / Restock
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openAddMedicineModal(prefillName = '') {
+      document.getElementById('med-modal-title').textContent = 'Add New Medicine / Batch';
+      document.getElementById('medicine-form').reset();
+      document.getElementById('med-edit-id').value = '';
+      if (prefillName) {
+        document.getElementById('med-brand').value = prefillName;
+      }
+      document.getElementById('med-batch').value = 'BTH-' + new Date().getFullYear() + '-' + String(Math.floor(10 + Math.random() * 89));
+      document.getElementById('med-expiry').value = getRelativeDate(365);
+      document.getElementById('med-add-to-cart-option').classList.remove('hidden');
+      document.getElementById('med-auto-cart').checked = true;
+      document.getElementById('medicine-modal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('med-brand').focus(), 100);
+    }
+
+    function openEditMedicineModal(medId) {
+      const m = medicines.find(item => item.id === medId);
+      if (!m) return;
+
+      document.getElementById('med-modal-title').textContent = `Edit / Restock: ${m.brand}`;
+      document.getElementById('med-edit-id').value = m.id;
+      document.getElementById('med-add-to-cart-option').classList.add('hidden');
+      document.getElementById('med-brand').value = m.brand;
+      document.getElementById('med-generic').value = m.generic;
+      document.getElementById('med-dosage').value = m.dosage;
+      document.getElementById('med-category').value = m.category;
+      document.getElementById('med-rx').value = String(m.isRx);
+      document.getElementById('med-batch').value = m.batch;
+      document.getElementById('med-expiry').value = m.expiry;
+      document.getElementById('med-price').value = m.price;
+      document.getElementById('med-blister-size').value = m.blisterSize;
+      document.getElementById('med-box-size').value = m.boxSize;
+      document.getElementById('med-stock').value = m.stock;
+      document.getElementById('med-reorder').value = m.reorderLevel;
+      document.getElementById('medicine-modal').classList.remove('hidden');
+    }
+
+    function saveMedicine(event) {
+      event.preventDefault();
+      const editId = document.getElementById('med-edit-id').value;
+
+      const medData = {
+        brand: document.getElementById('med-brand').value.trim(),
+        generic: document.getElementById('med-generic').value.trim(),
+        dosage: document.getElementById('med-dosage').value.trim(),
+        category: document.getElementById('med-category').value,
+        isRx: document.getElementById('med-rx').value === 'true',
+        batch: document.getElementById('med-batch').value.trim(),
+        expiry: document.getElementById('med-expiry').value,
+        price: parseFloat(document.getElementById('med-price').value) || 0,
+        blisterSize: parseInt(document.getElementById('med-blister-size').value, 10) || 10,
+        boxSize: parseInt(document.getElementById('med-box-size').value, 10) || 100,
+        stock: parseInt(document.getElementById('med-stock').value, 10) || 0,
+        reorderLevel: parseInt(document.getElementById('med-reorder').value, 10) || 50
+      };
+
+      if (editId) {
+        const idx = medicines.findIndex(m => m.id === editId);
+        if (idx !== -1) {
+          medicines[idx] = { ...medicines[idx], ...medData };
+          showToast(`${medData.brand} updated successfully!`, 'emerald');
+        }
+      } else {
+        const newMed = {
+          id: 'MED-' + String(Date.now()).slice(-4),
+          sku: '48000' + String(Math.floor(10000 + Math.random() * 90000)),
+          ...medData
+        };
+        medicines.unshift(newMed);
+        showToast(`${medData.brand} added to JDM PHARMACY inventory!`, 'emerald');
+
+        // Auto-add to cart if checked and has stock
+        if (document.getElementById('med-auto-cart').checked && newMed.stock > 0) {
+          selectedUnitByMed[newMed.id] = 'piece';
+          addToCart(newMed.id);
+        }
+      }
+
+      saveToStorage();
+      closeModal('medicine-modal');
+      renderCatalog();
+      renderInventory();
+    }
+
+    // ==================== SALES REPORTS & VOID AUDIT ====================
+    function renderSales() {
+      const completed = transactions.filter(t => t.status === 'COMPLETED');
+      const totalRev = completed.reduce((sum, t) => sum + t.netTotal, 0);
+      const totalDisc = completed.reduce((sum, t) => sum + t.totalDiscount, 0);
+
+      // Compute top-selling medicine
+      const itemCounts = {};
+      completed.forEach(tx => {
+        tx.items.forEach(item => {
+          itemCounts[item.brand] = (itemCounts[item.brand] || 0) + item.totalPieces;
+        });
+      });
+
+      let topName = '—';
+      let topQty = 0;
+      Object.entries(itemCounts).forEach(([brand, qty]) => {
+        if (qty > topQty) {
+          topName = brand;
+          topQty = qty;
+        }
+      });
+
+      document.getElementById('kpi-revenue').textContent = formatPHP(totalRev);
+      document.getElementById('kpi-transactions').textContent = completed.length;
+      document.getElementById('kpi-discounts').textContent = formatPHP(totalDisc);
+      document.getElementById('kpi-top-item').textContent = topName;
+      document.getElementById('kpi-top-item-sub').textContent = `${topQty} pcs dispensed`;
+
+      const tbody = document.getElementById('sales-table-body');
+      if (transactions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400 font-semibold">No transactions recorded yet. Complete a sale in POS Checkout!</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = transactions.map(tx => {
+        const isVoid = tx.status === 'VOIDED';
+        const itemSummary = tx.items.map(i => `${i.brand} (${i.qty} ${i.unitType})`).join(', ');
+        return `
+          <tr class="${isVoid ? 'bg-rose-50/50 text-slate-400' : 'hover:bg-slate-50'}">
+            <td class="py-3 px-4 font-mono font-bold ${isVoid ? 'line-through' : 'text-slate-900'}">${tx.orNumber}</td>
+            <td class="py-3 px-4">${new Date(tx.timestamp).toLocaleString('en-PH')}</td>
+            <td class="py-3 px-4 font-medium">${tx.cashier}</td>
+            <td class="py-3 px-4">
+              <div class="font-semibold">${tx.customerName}</div>
+              <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">${tx.discountType}</span>
+            </td>
+            <td class="py-3 px-4 max-w-[220px] truncate" title="${itemSummary}">${itemSummary}</td>
+            <td class="py-3 px-4 font-extrabold ${isVoid ? 'line-through' : 'text-emerald-700'}">${formatPHP(tx.netTotal)}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isVoid ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}">
+                ${tx.status}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+              <button onclick="reprintReceipt('${tx.orNumber}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg">Reprint</button>
+              ${!isVoid ? `<button onclick="promptVoidTransaction('${tx.orNumber}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg">Void</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function reprintReceipt(orNumber) {
+      const tx = transactions.find(t => t.orNumber === orNumber);
+      if (tx) openReceiptModal(tx);
+    }
+
+    function promptVoidTransaction(orNumber) {
+      pendingVoidTxId = orNumber;
+      document.getElementById('void-or-label').textContent = orNumber;
+      document.getElementById('void-pin-input').value = '';
+      document.getElementById('void-modal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('void-pin-input').focus(), 100);
+    }
+
+    function confirmVoidTransaction() {
+      const pin = document.getElementById('void-pin-input').value;
+      if (pin !== '1234') {
+        showToast('Invalid Pharmacist PIN! Hint: 1234', 'rose');
+        return;
+      }
+
+      const tx = transactions.find(t => t.orNumber === pendingVoidTxId);
+      if (tx && tx.status === 'COMPLETED') {
+        tx.status = 'VOIDED';
+        // Restore stock
+        tx.items.forEach(item => {
+          const med = medicines.find(m => m.id === item.medId);
+          if (med) med.stock += item.totalPieces;
+        });
+
+        saveToStorage();
+        renderCatalog();
+        renderInventory();
+        renderSales();
+        showToast(`Transaction ${tx.orNumber} voided and stock restored.`, 'amber');
+      }
+
+      closeModal('void-modal');
+      pendingVoidTxId = null;
+    }
+
+    // ==================== TOAST HELPER ====================
+    function showToast(message, color = 'emerald') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const bgMap = {
+        emerald: 'bg-emerald-800 text-white border-emerald-600',
+        amber: 'bg-amber-600 text-white border-amber-400',
+        rose: 'bg-rose-700 text-white border-rose-500'
+      };
+      toast.className = `px-4 py-2.5 rounded-xl shadow-lg border text-xs font-bold transition-all duration-300 ${bgMap[color] || bgMap.emerald}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Boot App
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>

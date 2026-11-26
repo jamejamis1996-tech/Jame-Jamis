@@ -1,0 +1,6 @@
+{
+  "name": "JDM Pharmacy — POS & Inventory System",
+  "description": "Point of Sale, FEFO Batch Expiry Inventory, Philippine Senior/PWD VAT-Exempt Billing, and Audit Log System for JDM Pharmacy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
